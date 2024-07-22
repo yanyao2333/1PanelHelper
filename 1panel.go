@@ -16,12 +16,6 @@ type PanelApiStruct struct {
 	Session string
 }
 
-type PanelApis interface {
-	GetCronjobList(request SearchRequest) (*SearchResponse, error)
-	GetCronjobRecords(request CronjobRecordRequest) (*CronjobRecordResponse, error)
-	LoginWithout2FA(username, password string) error
-}
-
 // GetCronjobRecords 获取定时任务记录
 func (p *PanelApiStruct) GetCronjobRecords(request CronjobRecordRequest) (*CronjobRecordResponse, error) {
 	if p.Session == "" {
@@ -81,6 +75,10 @@ func (p *PanelApiStruct) GetCronjobRecords(request CronjobRecordRequest) (*Cronj
 		return nil, fmt.Errorf("反序列化响应失败: %w", err)
 	}
 
+	if recordResp.Code != 200 {
+		return nil, errors.New(fmt.Sprintf("api返回内容状态码非200,请自行检查: %v", recordResp))
+	}
+
 	return &recordResp, nil
 }
 
@@ -122,6 +120,10 @@ func (p *PanelApiStruct) GetCronjobList(request SearchRequest) (*SearchResponse,
 	err = json.Unmarshal(body, &searchResp)
 	if err != nil {
 		return nil, fmt.Errorf("反序列化响应失败: %w", err)
+	}
+
+	if searchResp.Code != 200 {
+		return nil, errors.New(fmt.Sprintf("api返回内容状态码非200,请自行检查: %v", searchResp))
 	}
 
 	return &searchResp, nil
