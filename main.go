@@ -12,6 +12,28 @@ import (
 	"time"
 )
 
+// RecoverGo 包装一个函数，使其在 goroutine 中安全运行
+func RecoverGo(f func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("从panic中恢复: %v,推送错误消息", r)
+				recordChannel <- recordInChannelStruct{
+					recordItem: CronjobRecordItem{
+						ID:        114514,
+						StartTime: time.Now().Format(time.RFC3339),
+						Message:   fmt.Sprintf("%v", r),
+					},
+					cronjobItem: CronjobItem{
+						Name: "1PanelHelper自身错误",
+					},
+				}
+			}
+		}()
+		f()
+	}()
+}
+
 func getAllCronjobItems(p *PanelApiStruct) ([]CronjobItem, error) {
 	log.Println("开始获取定时任务列表")
 	list, err := p.GetCronjobList(SearchRequest{
@@ -100,8 +122,11 @@ func ProcessNewCronjobRecords(p *PanelApiStruct, dataFilePath string, cronjobId 
 		}
 		break
 	}
+	if len(records.Data.Items) == 0 {
+		log.Printf("任务 %d 一天内还没有运行过,跳过", cronjobId)
+		return nil
+	}
 	newestIdInJsonFile = records.Data.Items[0].ID
-
 	// 更新JSON文件
 	jsonData[cronjobId] = newestIdInJsonFile
 	updatedData, err := json.Marshal(jsonData)
@@ -147,11 +172,15 @@ func main() {
 	log.Println("通知系统初始化成功")
 
 	// 启动notify worker
-	go notifyWorker(n)
+	RecoverGo(func() {
+		notifyWorker(n)
+	})
 	log.Println("notify worker启动成功")
 
 	// 启动错误日志监控
-	go monitorNotifyErrors()
+	RecoverGo(func() {
+		monitorNotifyErrors()
+	})
 	log.Println("错误日志监控启动成功")
 
 	for {
@@ -166,13 +195,13 @@ func main() {
 		var wg sync.WaitGroup
 		for _, item := range cronjobItems {
 			wg.Add(1)
-			go func(item CronjobItem) {
+			RecoverGo(func() {
 				defer wg.Done()
 				err := ProcessNewCronjobRecords(&p, dataFilePath, item.ID, item)
 				if err != nil {
 					log.Printf("更新任务 %d 的记录失败: %v", item.ID, err)
 				}
-			}(item)
+			})
 		}
 
 		wg.Wait()
