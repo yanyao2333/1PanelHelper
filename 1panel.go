@@ -39,7 +39,6 @@ func (p *PanelApiStruct) GetCronjobRecords(request CronjobRecordRequest) (*Cronj
 		EndTime:   endTime,
 		Status:    "",
 	}
-	fmt.Printf("%+v", reqData)
 	jsonData, err := json.Marshal(reqData)
 	if err != nil {
 		return nil, fmt.Errorf("序列化 JSON 数据错误: %w", err)
@@ -58,7 +57,9 @@ func (p *PanelApiStruct) GetCronjobRecords(request CronjobRecordRequest) (*Cronj
 	if err != nil {
 		return nil, fmt.Errorf("发送请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -105,7 +106,9 @@ func (p *PanelApiStruct) GetCronjobList(request SearchRequest) (*SearchResponse,
 	if err != nil {
 		return nil, fmt.Errorf("发送请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -166,7 +169,9 @@ func (p *PanelApiStruct) LoginWithout2FA(username, password, entranceCode string
 	if err != nil {
 		return fmt.Errorf("发送请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

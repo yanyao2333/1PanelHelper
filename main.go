@@ -7,8 +7,10 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -45,7 +47,7 @@ func getAllCronjobItems(p *PanelApiStruct) ([]CronjobItem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("获取定时任务列表失败: %w", err)
 	}
-	log.Printf("获取到部分定时任务列表，共 %d 条记录", list.Data.Total)
+	log.Printf("获取到部分定时任务列表，共 %d 条记录", len(list.Data.Items))
 
 	fullList, err := p.GetCronjobList(SearchRequest{
 		Page:     1,
@@ -64,7 +66,7 @@ func getAllCronjobItems(p *PanelApiStruct) ([]CronjobItem, error) {
 func notifyWorker(n notify.Notify) {
 	for item := range recordChannel {
 		log.Printf("开始向通知通道推送任务 %d 的失败提醒", item.recordItem.ID)
-		title := fmt.Sprintf("任务 「%s」出错了!", item.cronjobItem.Name)
+		title := fmt.Sprintf("1PanelHelper: 任务 「%s」出错了!", item.cronjobItem.Name)
 		content := fmt.Sprintf("任务名: %s\n任务id: %s\n任务触发时间: %s\n错误信息: %s\n", item.cronjobItem.Name, strconv.Itoa(item.recordItem.ID), item.recordItem.StartTime, item.recordItem.Message)
 		err := n.PushNotify(content, title)
 		if err != nil {
@@ -182,6 +184,32 @@ func main() {
 		monitorNotifyErrors()
 	})
 	log.Println("错误日志监控启动成功")
+
+	log.Println("程序初始化完成, 发送条通知报平安~")
+	err = n.PushNotify("1PanelHelper成功启动!", "1PanelHelper")
+	if err != nil {
+		log.Printf("再发送通知时出错: %s", err)
+	}
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		_ = <-sigs
+		fmt.Println("接收到退出信号,程序退出!")
+		_ = n.PushNotify("接收到退出信号, 正常退出", "1PanelHelper: 退出")
+		os.Exit(0)
+	}()
+
+	go func() {
+		for {
+			time.Sleep(time.Hour * 24)
+			err := n.PushNotify("已经一天了! 报个平安!", "1PanelHelper: 报平安")
+			if err != nil {
+				log.Printf("再发送通知时出错: %s", err)
+			}
+		}
+	}()
 
 	for {
 		cronjobItems, err := getAllCronjobItems(&p)
